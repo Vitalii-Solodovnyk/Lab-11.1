@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_ACCOUNTS 10
+#define MAX_NAME 50
+#define MAX_HISTORY 100
+#define DB_FILENAME "bank_db.txt"
+
+typedef enum {
+    ACTION_EXIT = 0,
+    ACTION_DEPOSIT = 1,
+    ACTION_WITHDRAW = 2,
+    ACTION_SHOW = 3,
+    ACTION_HISTORY = 4
+} BankAction;
+
+
+typedef struct {
+    int id;
+    char owner[MAX_NAME];
+    double balance;
+    double history[MAX_HISTORY]; 
+    int history_count;
+} BankAccount;
+
+
+BankAccount* find_account(BankAccount *db, int size, int id);
+void deposit(BankAccount *acc, double amount);
+void withdraw(BankAccount *acc, double amount);
+void show_info(BankAccount acc); 
+void show_history(BankAccount *acc);
+void save_data(BankAccount *db, int size);
+int load_data(BankAccount *db);
+
+int main() {
+    BankAccount accounts[MAX_ACCOUNTS];
+    int current_count = load_data(accounts);
+
+    if (current_count == 0) {
+        accounts[0] = (BankAccount){5, "Jan Kowalski", 100.0, {100.0}, 1};
+        accounts[1] = (BankAccount){10, "Anna Nowak", 500.0, {500.0}, 1};
+        current_count = 2;
+    }
+
+    int choice, search_id;
+    double amount;
+
+    do {
+        printf("\n--- SYSTEM BANKOWY 2.0 ---\n");
+        printf("1 - WPLATA\n2 - WYPLATA\n3 - INFO O KONCIE\n4 - HISTORIA\n0 - WYJSCIE\nWybor: ");
+        if (scanf("%d", &choice) != 1) {
+            while(getchar() != '\n'); continue;
+        }
+
+        if (choice == ACTION_EXIT) break;
+
+        printf("Podaj ID konta: ");
+        scanf("%d", &search_id);
+     
+        BankAccount *acc = find_account(accounts, current_count, search_id);
+
+        if (acc == NULL) {
+            printf("Blad: Nie znaleziono konta o ID %d\n", search_id);
+            continue;
+        }
+
+        switch ((BankAction)choice) {
+            case ACTION_DEPOSIT:
+                printf("Kwota wplaty: ");
+                scanf("%lf", &amount);
+                deposit(acc, amount); 
+                break;
+            case ACTION_WITHDRAW:
+                printf("Kwota wyplaty: ");
+                scanf("%lf", &amount);
+                withdraw(acc, amount);
+                break;
+            case ACTION_SHOW:
+                show_info(*acc);
+                break;
+            case ACTION_HISTORY:
+                show_history(acc);
+                break;
+            default:
+                printf("Niepoprawna opcja.\n");
+        }
+    } while (choice != ACTION_EXIT);
+
+    save_data(accounts, current_count); 
+    printf("Dane zapisane. Koniec programu.\n");
+    return 0;
+}
+
+
+BankAccount* find_account(BankAccount *db, int size, int id) {
+    for (int i = 0; i < size; i++) {
+        if (db[i].id == id) return &db[i];
+    }
+    return NULL;
+}
+
+
+void deposit(BankAccount *acc, double amount) {
+    if (amount > 0) {
+        acc->balance += amount;
+        if (acc->history_count < MAX_HISTORY) {
+            acc->history[acc->history_count++] = amount;
+        }
+        printf("[DEPOSIT] Wplata przyjeta. Nowy stan konta ID %d (Wlasciciel: %s): %.2f PLN\n", 
+               acc->id, acc->owner, acc->balance);
+    }
+}
+
+void withdraw(BankAccount *acc, double amount) {
+    if (amount > 0 && acc->balance >= amount) {
+        acc->balance -= amount;
+        if (acc->history_count < MAX_HISTORY) {
+            acc->history[acc->history_count++] = -amount;
+        }
+        printf("[WITHDRAW] Wyplacono %.2f PLN.\n", amount);
+    } else {
+        printf("Blad: Brak srodkow.\n");
+    }
+}
+
+
+void show_info(BankAccount acc) {
+    printf("[SHOW] Klient: %s | ID: %d | Saldo: %.2f PLN\n", acc.owner, acc.id, acc.balance);
+}
+
+void show_history(BankAccount *acc) {
+    printf("=== HISTORIA TRANSAKCJI (%s) ===\n", acc->owner);
+    double running_balance = 0; 
+    for (int i = 0; i < acc->history_count; i++) {
+        running_balance += acc->history[i];
+        printf("%d. %+.2f (Saldo po: %.2f)\n", i + 1, acc->history[i], running_balance);
+    }
+}
+
+
+void save_data(BankAccount *db, int size) {
+    FILE *f = fopen(DB_FILENAME, "w");
+    if (!f) return;
+    for (int i = 0; i < size; i++) {
+        fprintf(f, "%d|%s|%lf|%d\n", db[i].id, db[i].owner, db[i].balance, db[i].history_count);
+    }
+    fclose(f);
+}
+
+int load_data(BankAccount *db) {
+    FILE *f = fopen(DB_FILENAME, "r");
+    if (!f) return 0;
+    int count = 0;
+    while (count < MAX_ACCOUNTS && fscanf(f, "%d|%[^|]|%lf|%d\n", 
+           &db[count].id, db[count].owner, &db[count].balance, &db[count].history_count) == 4) {
+        count++;
+    }
+    fclose(f);
+    return count;
+}
